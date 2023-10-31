@@ -42,7 +42,7 @@ primary_rep <- read_csv("data/md_primary_precinct_rep.csv") %>%
 Now Combine (stack) the two dataframes into one combined dataframe, so all the records from both tables are in one place to use.
 
 ```{r}
-
+dta <- bind_rows(list(primary_dem, primary_rep))
 
 
 
@@ -60,7 +60,9 @@ To use clean_names() you apply it to your dataframe like:
 
 ```{r}
 
-
+dta <-
+  dta %>% 
+  clean_names()
 
 
 
@@ -81,8 +83,8 @@ Next use left_join() to join the two tables based on the unique combination of p
 ```{r}
 
 
-
-
+dta_joined <-
+  left_join(precinct_voting_locations, dta, by = c("county_code" = "county", "precinct_code" = "election_district_precinct"))
 
 
 ```
@@ -94,7 +96,9 @@ Next use left_join() to join the two tables based on the unique combination of p
 Write code to produce a `votes` column which is the result of adding together `early_votes`, `election_night_votes`, `provisional_votes` and the mail-in votes, overwriting your dataframe so that it now has that `total_votes` column permanently.
 
 ```{r}
-
+dta_joined <-
+  dta_joined %>% 
+  mutate(totalvotes = early_votes + election_night_votes + provisional_votes)
 
 
 ```
@@ -102,31 +106,57 @@ Write code to produce a `votes` column which is the result of adding together `e
 Next, separately write code to show each county and precinct and calculate the total votes in the Governor's race - bearing in mind that each precinct will have multiple rows in the dataframe, but you only want to see one row for each precinct. (So you'll want to use grouping and summarizing.)
 
 ```{r}
+precinct_votes <-
+  dta_joined %>% 
+  filter(office_name == "Governor / Lt. Governor") %>% 
+  group_by(county_code, precinct_code) %>% 
+  summarize(precinct_votes = sum(totalvotes))
 
+max_row <- precinct_votes[precinct_votes$precinct_votes == max(precinct_votes$precinct_votes), ]
 
-
-
-
+max_row_joined <-
+  dta_joined %>% 
+  filter(precinct_code == 2003,
+         county_code == 5)
 ```
 
-What is the name and voting location of the precinct that saw the most votes in the governor's race? *Put answer here*
+What is the name and voting location of the precinct that saw the most votes in the governor's race? *The answer is precinct code 2003 in county code 5, which is the elementary school in Huntingtown MD, Calvert County*
 
 ### Q2.
 
 Let's look at the average number of votes in each party's primary race for governor. Take the code you wrote for the last part of Q2, save the results to a new variable and then find the precincts with 0 total votes for governor.
 
 ```{r}
+dta_joined <-
+  dta_joined %>% 
+    group_by(precinct_code) %>% 
+    mutate(precinct_votes = sum(totalvotes))
 
-
-
-
-
-
+zero_votes <-
+  dta_joined %>% 
+  filter(precinct_votes == 0)
+#all of the precincts with 0 votes for governor are above
 ```
 
-How many precincts are there, and which county has the most? *Put answer here*
+Second Part is below.
 
-What else would you need to know about these precincts to know whether this might be worth a story? *Put answer here*
+```{r}
+county_precinct_count <-
+  dta_joined %>% 
+  group_by(county_code) %>% 
+  summarize(num_precincts = n_distinct(precinct_code))
+
+sum <- county_precinct_count %>% 
+  sum(county_precinct_count$num_precincts)
+
+county_17 <-
+  dta_joined %>% 
+  filter(county_code == 17)
+```
+
+How many precincts are there, and which county has the most? *4442 precincts, in county 17 which is Prince George's County*
+
+What else would you need to know about these precincts to know whether this might be worth a story? *I'm assuming this is referring to the precincts who had 0 votes for governor. I would need to go back and look at how many total votes that each precinct had overall or for other offices and then see if this exposes a trend (maybe their ballots were messed up?)*
 
 ### Q3.
 
@@ -134,10 +164,23 @@ Choose your own adventure: I want you to come up with a question you could ask o
 
 First write the question and then try to answer it by writing code. If you're not sure of the exact code at a minimum, describe what you think you'd have to do to answer it and what the results would look like.
 
+My question: Which county had the highest percentage of mail in ballots?
 ```{r}
+dta_joined <-
+  dta_joined %>% 
+  group_by(county_code) %>% 
+  mutate(pct_mail_vote = (sum(mail_in_ballot_1_votes) + sum(mail_in_ballot_2_votes))/sum(totalvotes) * 100)
 
+dta_joined <-
+  dta_joined %>% 
+  na.omit(pct_mail_vote)
 
+max_row_mail <- dta_joined[dta_joined$pct_mail_vote == max(dta_joined$pct_mail_vote), ]
 
+max_row_mail %>% 
+  group_by(county_code, precinct_code) %>% 
+  summarize(n = n())
 
 
 ```
+Looks like County Code 16, Montgomery county had the highest percentage of mail in ballots.
